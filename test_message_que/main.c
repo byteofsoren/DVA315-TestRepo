@@ -51,11 +51,12 @@ void* printer(void* data)
     // This is the reciver thread.
     int *d = (int*)data; // just stops the linter from complaining about unused variable.
     d = NULL;
-    mq_open(mq_name,O_RDONLY, mq_messages); // open message queue.
     while (1) {
         char* messages;
         messages = (char *) calloc(sizeof(char*),size_max); // Alloc a place for the message
-        mq_receive(mq_messages, messages, size_max,0);
+        mq_open(mq_name,O_RDONLY, mq_messages); // open message queue.
+        printf("%ld ", mq_receive(mq_messages, messages, size_max,0));
+        mq_close(mq_messages);
         printf("Print %s\n", messages);
         free(messages);
         usleep(300000);
@@ -67,14 +68,16 @@ void* sender(void* data)
     int *d = (int*)data;
     d = NULL;
      int counter = 0;
-     mq_open(mq_name,O_WRONLY,  mq_messages);  // open mesage queue.
      while (1) {
          char* str;
          str = (char*)calloc(sizeof(char),size_max);
          str = itoa(counter, str);      // convert to string.
+         mq_open(mq_name,O_WRONLY,  mq_messages);  // open mesage queue.
+         printf("%d ", mq_send(mq_messages, str, size_max,0));
+         mq_close(mq_messages);
          printf("send: '%s'\n",str );
-         mq_send(mq_messages, str, size_max,0);
-         usleep(100000);
+         free(str);
+         usleep(500000);
          counter++;
      }
 }
