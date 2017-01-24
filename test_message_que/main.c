@@ -1,3 +1,5 @@
+#include <string.h>
+#include <errno.h>
 #include <mqueue.h>
 #include <pthread.h>
 #include <fcntl.h>
@@ -9,6 +11,7 @@
 
 #define mq_name "/mq_name"
 #define size_max 1024
+#define SEC 100000
 #define _GNU_SOURCE
 
 void* printer(void* data);
@@ -26,8 +29,12 @@ int main(void)
     attr.mq_flags = 0;
     attr.mq_curmsgs = 0;
     attr.mq_maxmsg = 100;
-    mq_open(mq_name, O_CREAT | O_RDWR, &attr);
+    mode_t omask;
+    omask = umask(0);
+    mq_messages = mq_open(mq_name,(O_RDONLY| O_CREAT), (S_IRWXU | S_IRWXG | S_IRWXO), &attr);
+    umask(omask);
     // Create the threads for senden and reciver.
+    perror("mq_messages\n");
     pthread_t printThread;
     pthread_t senderThread;
     pthread_create(&printThread,NULL, printer, NULL);
@@ -48,42 +55,52 @@ int main(void)
 
 void* printer(void* data)
 {
+    printf("printer()i\n");
+    char buffer[size_max + 1];
     // This is the reciver thread.
     int *d = (int*)data; // just stops the linter from complaining about unused variable.
     d = NULL;
+    mqd_t mq_printer;
+    mq_printer = mq_open(mq_name, O_RDONLY, 0644, &attr);
     while (1) {
-        char* messages;
-        messages = (char *) calloc(sizeof(char*),size_max); // Alloc a place for the message
-        mq_open(mq_name,O_RDONLY, mq_messages); // open message queue.
-        printf("%ld ", mq_receive(mq_messages, messages, size_max,0));
-        mq_close(mq_messages);
-        printf("Print %s\n", messages);
-        free(messages);
-        usleep(300000);
+        ssize_t temp;
+        //if(attr.mq_curmsgs > 0){
+            temp = mq_receive(mq_printer,buffer,size_max ,NULL);
+            perror("mq_receive");
+//          mq_close(mq_messages);
+            //printf("Print: temp=%lu\tmessages=%s\tmq=%d\n", temp,  buffer , mq_messages);
+       // }else{
+            //printf("No messages to retreave!\n");
+        //}
+        usleep(3*SEC);
     }
 }
 
 void* sender(void* data)
 {
+    printf("sender()\n");
     int *d = (int*)data;
     d = NULL;
-     int counter = 0;
-     while (1) {
-         char* str;
-         str = (char*)calloc(sizeof(char),size_max);
-         str = itoa(counter, str);      // convert to string.
-         mq_open(mq_name,O_WRONLY,  mq_messages);  // open mesage queue.
-         printf("%d ", mq_send(mq_messages, str, size_max,0));
-         mq_close(mq_messages);
-         printf("send: '%s'\n",str );
-         free(str);
-         usleep(500000);
-         counter++;
+
+    int counter = 0;
+    //mq_open(mq_name,O_WRONLY,  mq_messages);  // open mesage queue.
+    mqd_t mq_sender;
+    mq_sender = mq_open(mq_name, O_WRONLY , 0644, &attr);
+    while (1) {
+        char BUFFER[size_max + 1];
+        strcpy(BUFFER, itoa(counter,BUFFER));
+        printf("sender() BUFFER=%s\n", BUFFER);
+        int temp = mq_send(mq_sender ,BUFFER ,size_max, 0);
+        //perror("mq_send");
+        printf("sender: mq_state=%d Sent_to_mq='%s\n'",temp, BUFFER );
+        usleep(4*SEC);
+        counter++;
      }
 }
 
 
 char* itoa(int i, char b[]){
+    // Convrets int to string
     char const digit[] = "0123456789";
     char* p = b;
     if(i<0){
